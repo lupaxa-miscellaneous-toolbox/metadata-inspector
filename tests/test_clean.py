@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import piexif
@@ -63,10 +64,9 @@ def test_public_jpeg_clean_keeps_pixels_and_copyright() -> None:
     assert "exif.copyright" in remaining
     assert "iptc.copyright" in remaining
     assert "xmp.city" not in remaining
-    assert (
-        Image.open(__import__("io").BytesIO(original)).size
-        == Image.open(__import__("io").BytesIO(cleaned)).size
-    )
+    original_size = Image.open(io.BytesIO(original)).size
+    cleaned_size = Image.open(io.BytesIO(cleaned)).size
+    assert original_size == cleaned_size
     assert "Display orientation" in preserved or "Image dimensions" in preserved
 
 
