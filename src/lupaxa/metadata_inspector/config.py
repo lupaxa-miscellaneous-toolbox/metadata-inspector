@@ -88,6 +88,7 @@ def _apply(settings: Settings, data: dict[str, object], path: Path) -> Settings:
         ),
         colour=_bool(data, "colour", settings.colour, path),
         max_file_size=_positive(data, "max_file_size", settings.max_file_size, path),
+        max_video_size=_positive(data, "max_video_size", settings.max_video_size, path),
         max_depth=_positive(data, "max_depth", settings.max_depth, path),
         workers=_positive(data, "workers", settings.workers, path),
         follow_symlinks=_bool(data, "follow_symlinks", settings.follow_symlinks, path),

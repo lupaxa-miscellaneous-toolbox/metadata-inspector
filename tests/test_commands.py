@@ -147,6 +147,18 @@ def test_xmp_doctype_is_rejected() -> None:
         read_xmp(packet)
 
 
+def test_photograph_json_gains_empty_video_facts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    photo = tmp_path / "still.jpg"
+    photo.write_bytes(plain_jpeg())
+    assert main(["scan", str(photo), "--json", "--quiet"]) == 0
+    result = json.loads(capsys.readouterr().out)["results"][0]
+    assert result["duration_seconds"] is None
+    assert result["video_codec"] is None
+    assert result["audio_tracks"] == []
+
+
 def test_output_collision_does_not_overwrite(tmp_path: Path) -> None:
     photo = tmp_path / "holiday.jpg"
     photo.write_bytes(jpeg_bytes())

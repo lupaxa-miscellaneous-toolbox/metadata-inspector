@@ -58,6 +58,27 @@ def capability_report() -> dict[str, object]:
                     else "Install the heif extra (pillow-heif) to inspect HEIC/HEIF."
                 ],
             ),
+            "bmff": _row(
+                True,
+                True,
+                True,
+                ["EXIF", "GPS", "XMP", "CONTAINER", "THUMBNAIL"],
+                python_backend,
+                [
+                    "Matroska, WebM, AVI, and other containers are not read.",
+                    (
+                        "Fragmented MP4, encrypted samples, and media stored outside "
+                        "the file are unsupported."
+                    ),
+                    (
+                        "A metadata track that is not ISO 6709 or NMEA is removed by a "
+                        "medium-removing profile without interpreting the samples."
+                    ),
+                    "Cleaning does not re-encode. Picture and sound bytes are copied.",
+                    "The video size ceiling defaults to 8 GiB. A moov over 32 MiB is refused.",
+                    "ExifTool is not used to inspect or clean movies.",
+                ],
+            ),
         },
     }
 

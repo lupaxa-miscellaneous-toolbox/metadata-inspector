@@ -20,6 +20,8 @@ REDACTED_IDS = frozenset(
         "exif.image.unique_id",
         "iptc.contact",
         "xmp.contact",
+        "container.device.serial",
+        "container.gps.route",
     }
 )
 
@@ -59,6 +61,10 @@ def safe_binary(data: bytes) -> str:
 
 def display_value(finding_id: str, value: str, *, reveal: bool) -> str:
     """Mask precise coordinates, serial numbers, and contact values."""
+    if finding_id == "container.gps.route" and not reveal:
+        count, _sep, _rest = value.partition(";")
+        if _sep:
+            return count.strip() + "; [redacted]"
     if reveal or finding_id not in REDACTED_IDS:
         return value
     if not value:

@@ -51,10 +51,10 @@ python -m lupaxa.metadata_inspector version
 ## Commands
 
 A directory command looks at `jpg`, `jpeg`, `png`, `webp`, `tif`, `tiff`,
-`heic`, and `heif` unless you pass `--extensions`.
+`heic`, `heif`, `mp4`, `m4v`, `mov`, and `3gp` unless you pass `--extensions`.
 
 | Command    | What it Does                                                                                                     |
-| :--------: | :--------------------------------------------------------------------------------------------------------------: |
+| :--------: | :--------------------------------------------------------------------------------------------------------------- |
 | `scan`     | Inspect files or a directory and print the findings.                                                             |
 | `show`     | List metadata for one file, grouped by family, with the stored value and a readable form.                        |
 | `explain`  | Add the classification, what the field means, and what a profile would do with it.                               |
@@ -81,7 +81,7 @@ Shared options work on every command. The command column names the commands
 where that option changes the result.
 
 | Option                | Commands                           | What it Does                                                                          |
-| :-------------------: | :--------------------------------: | :-----------------------------------------------------------------------------------: |
+| :-------------------: | :--------------------------------: | :------------------------------------------------------------------------------------ |
 | `--recursive`, `-r`   | `scan`, `clean`, `report`, `check` | Walk subdirectories.                                                                  |
 | `--extensions`        | `scan`, `clean`, `report`, `check` | Comma-separated extensions to include.                                                |
 | `--hidden`            | `scan`, `clean`, `report`, `check` | Include names that start with a dot.                                                  |
@@ -118,7 +118,7 @@ if that classification would otherwise be removed. No profile makes a
 photograph anonymous.
 
 | Profile     | What it Removes                                                                                      |
-| :---------: | :--------------------------------------------------------------------------------------------------: |
+| :---------: | :--------------------------------------------------------------------------------------------------- |
 | `metadata`  | High, medium, low, and informational metadata. Attribution is removed.                               |
 | `public`    | High and medium findings, including GPS and serial numbers. Attribution stays. This is the default.  |
 | `anonymous` | High, medium, and low findings, including attribution. The image content can still identify someone. |
@@ -201,10 +201,21 @@ not used to inspect or clean. `backend = "exiftool"` is rejected.
 AVIF and BigTIFF are reported as unsupported. TIFF IPTC and XMP are not read.
 A file that cannot be inspected does not count as clean.
 
+### Video
+
+- Matroska, WebM, AVI, and other containers are not read.
+- Fragmented MP4, encrypted samples, and media stored outside the file are unsupported.
+- A metadata track that is not ISO 6709 or NMEA is removed by a medium-removing profile without interpreting the samples.
+- Cleaning does not re-encode. Picture and sound bytes are copied.
+- The video size ceiling defaults to 8 GiB. A moov over 32 MiB is refused.
+- ExifTool is not used to inspect or clean movies.
+- Removing metadata does not remove identifying information in the picture or the soundtrack.
+- A file that cannot be inspected does not count as clean.
+
 ## Exit Codes
 
 | Code | Meaning                                                                   |
-| :--: | :-----------------------------------------------------------------------: |
+| :--: | :------------------------------------------------------------------------ |
 | 0    | The command finished. A scan that finds sensitive metadata still exits 0. |
 | 1    | A file could not be read or inspected.                                    |
 | 2    | The command line or configuration is invalid.                             |

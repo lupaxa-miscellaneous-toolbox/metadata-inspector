@@ -27,6 +27,32 @@ _COLOURS = {
     "informational": "\033[2m",
 }
 _RESET = "\033[0m"
+_SOUNDTRACK = (
+    " Removing metadata does not remove identifying information in the picture or the soundtrack."
+)
+
+
+def inspection_disclaimer(image_format: str) -> str:
+    """Return the disclaimer for one inspected format."""
+    if image_format == "bmff":
+        return DISCLAIMER + _SOUNDTRACK
+    return DISCLAIMER
+
+
+def media_fact_lines(inspection: Inspection) -> list[str]:
+    """Return duration, video codec, and audio lines when those facts are present."""
+    lines: list[str] = []
+    facts = inspection.facts
+    if facts.duration_seconds is not None:
+        lines.append(f"Duration: {facts.duration_seconds}")
+    if facts.video_codec is not None:
+        lines.append(f"Video codec: {facts.video_codec}")
+    for track in facts.audio_tracks:
+        lines.append(
+            f"Audio: {track.get('codec')}, {track.get('channels')} channels, "
+            f"{track.get('sample_rate')} Hz"
+        )
+    return lines
 
 
 def inspection_payload(inspection: Inspection, *, reveal: bool) -> dict[str, object]:
@@ -39,12 +65,15 @@ def inspection_payload(inspection: Inspection, *, reveal: bool) -> dict[str, obj
         "backend": inspection.backend,
         "width": inspection.facts.width,
         "height": inspection.facts.height,
+        "duration_seconds": inspection.facts.duration_seconds,
+        "video_codec": inspection.facts.video_codec,
+        "audio_tracks": inspection.facts.audio_tracks,
         "families": inspection.families(),
         "findings": [_finding_payload(finding, reveal=reveal) for finding in inspection.findings],
         "summary": inspection.summary(),
         "limitations": inspection.limitations,
         "errors": inspection.errors,
-        "disclaimer": DISCLAIMER,
+        "disclaimer": inspection_disclaimer(inspection.format),
     }
 
 
@@ -89,7 +118,10 @@ def text_inspections(
     ]
     if len(inspections) > 1:
         blocks.append(_aggregate(inspections))
-    blocks.append(DISCLAIMER)
+    if any(inspection.format == "bmff" for inspection in inspections):
+        blocks.append(inspection_disclaimer("bmff"))
+    else:
+        blocks.append(DISCLAIMER)
     return "\n\n".join(blocks) + "\n"
 
 
@@ -109,6 +141,7 @@ def text_inspection(
     ]
     if inspection.facts.width and inspection.facts.height:
         lines.append(f"Dimensions: {inspection.facts.width} x {inspection.facts.height}")
+    lines.extend(media_fact_lines(inspection))
     if inspection.errors:
         lines.append("Errors: " + "; ".join(inspection.errors))
     visible = [

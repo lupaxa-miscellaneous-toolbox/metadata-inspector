@@ -12,9 +12,8 @@ from .config import ConfigError, load_settings
 from .discover import PathSafetyError, collect_files, output_path
 from .engine import (
     clean_file,
-    inspect_bytes,
     inspect_path,
-    verify_clean,
+    verify_paths,
 )
 from .formats_cmd import capability_report, format_text
 from .models import (
@@ -40,8 +39,10 @@ from .render import (
     dumps_json,
     dumps_json_lines,
     html_report,
+    inspection_disclaimer,
     inspection_payload,
     markdown_report,
+    media_fact_lines,
     text_clean,
     text_inspections,
 )
@@ -231,7 +232,10 @@ def _profiles(args: argparse.Namespace, settings: Settings) -> int:
 
 
 def _show(args: argparse.Namespace, settings: Settings) -> int:
-    inspection = inspect_path(Path(args.path), max_file_size=_max_size(args, settings))
+    max_file_size, max_video_size = size_limits(args, settings)
+    inspection = inspect_path(
+        Path(args.path), max_file_size=max_file_size, max_video_size=max_video_size
+    )
     if args.json or args.format == "json":
         print(dumps_json(inspection_payload(inspection, reveal=_reveal(args, settings))))
         return _status_exit([inspection])
@@ -240,8 +244,9 @@ def _show(args: argparse.Namespace, settings: Settings) -> int:
         f"File: {inspection.file}",
         f"Format: {inspection.format}",
         f"Status: {inspection.status}",
-        "",
     ]
+    lines.extend(media_fact_lines(inspection))
+    lines.append("")
     current = None
     for record in inspection.records:
         if family and record.family.upper() != family:
@@ -254,13 +259,16 @@ def _show(args: argparse.Namespace, settings: Settings) -> int:
             lines.append(f"    raw: {record.raw}")
     if not lines[-1]:
         lines.append("No metadata records.")
-    lines.append(DISCLAIMER)
+    lines.append(inspection_disclaimer(inspection.format))
     print("\n".join(lines))
     return _status_exit([inspection])
 
 
 def _explain(args: argparse.Namespace, settings: Settings) -> int:
-    inspection = inspect_path(Path(args.path), max_file_size=_max_size(args, settings))
+    max_file_size, max_video_size = size_limits(args, settings)
+    inspection = inspect_path(
+        Path(args.path), max_file_size=max_file_size, max_video_size=max_video_size
+    )
     chosen = inspection.findings
     if args.field:
         needle = args.field.lower()
@@ -280,7 +288,7 @@ def _explain(args: argparse.Namespace, settings: Settings) -> int:
             f"  Classification: {finding.classification}\n"
             f"  Value: {value}\n  {finding.explanation}\n  {finding.action}"
         )
-    blocks.append(DISCLAIMER)
+    blocks.append(inspection_disclaimer(inspection.format))
     text = "\n\n".join(blocks) + "\n"
     if args.json or args.format == "json":
         print(
@@ -292,8 +300,10 @@ def _explain(args: argparse.Namespace, settings: Settings) -> int:
 
 
 def _compare(args: argparse.Namespace, settings: Settings) -> int:
+    max_file_size, max_video_size = size_limits(args, settings)
     inspections = [
-        inspect_path(Path(path), max_file_size=_max_size(args, settings)) for path in args.paths
+        inspect_path(Path(path), max_file_size=max_file_size, max_video_size=max_video_size)
+        for path in args.paths
     ]
     payload = compare_payload(inspections[0], inspections[1], reveal=_reveal(args, settings))
     if args.json or args.format == "json":
@@ -325,24 +335,30 @@ def _verify(args: argparse.Namespace, settings: Settings) -> int:
     profile = _profile(args, settings, default="public")
     if isinstance(profile, int):
         return profile
-    max_size = _max_size(args, settings)
+    max_file_size, max_video_size = size_limits(args, settings)
     if len(args.paths) == 1:
-        inspection = inspect_path(Path(args.paths[0]), max_file_size=max_size)
+        inspection = inspect_path(
+            Path(args.paths[0]), max_file_size=max_file_size, max_video_size=max_video_size
+        )
         prohibited = [
             finding.name for finding in inspection.findings if should_remove(finding, profile)
         ]
         status = "failed" if prohibited else "passed"
         if inspection.status != "completed":
             status = "incomplete" if inspection.status == "incomplete" else "unsupported"
-        text = f"Verification: {args.paths[0]}\nVerification: {status.upper()}\n{DISCLAIMER}\n"
+        text = (
+            f"Verification: {args.paths[0]}\nVerification: {status.upper()}\n"
+            f"{inspection_disclaimer(inspection.format)}\n"
+        )
         if prohibited:
             text = "Remaining prohibited metadata: " + ", ".join(prohibited) + "\n" + text
     else:
-        original = Path(args.paths[0]).read_bytes()
-        cleaned = Path(args.paths[1]).read_bytes()
-        source = inspect_bytes(original, args.paths[0])
-        status, removed, preserved, limits = verify_clean(
-            original, cleaned, source, profile, pixels_modified=False
+        status, removed, preserved, limits = verify_paths(
+            Path(args.paths[0]),
+            Path(args.paths[1]),
+            profile,
+            max_file_size=max_file_size,
+            max_video_size=max_video_size,
         )
         text = (
             f"Verification: {args.paths[1]}\n"
@@ -376,6 +392,7 @@ def _clean(args: argparse.Namespace, settings: Settings) -> int:
     if output is not None and as_directory:
         output.mkdir(parents=True, exist_ok=True)
     suffix = args.suffix or settings.suffix
+    max_file_size, max_video_size = size_limits(args, settings)
     results = []
     for source in paths:
         if _skip_generated(source, suffix, output):
@@ -388,7 +405,8 @@ def _clean(args: argparse.Namespace, settings: Settings) -> int:
                 source,
                 destination,
                 profile,
-                max_file_size=_max_size(args, settings),
+                max_file_size=max_file_size,
+                max_video_size=max_video_size,
                 dry_run=args.dry_run,
                 force=args.force,
                 apply_orientation=args.apply_orientation,
@@ -511,12 +529,12 @@ def _inspect_many(args: argparse.Namespace, settings: Settings) -> list[Inspecti
     if workers < 1:
         print("--workers must be a positive integer", file=sys.stderr)
         return EXIT_USAGE
-    max_size = _max_size(args, settings)
+    max_file_size, max_video_size = size_limits(args, settings)
 
     def _one(path: Path) -> Inspection:
         if args.verbose and not (args.json or args.format == "json"):
             print(f"inspect {path}", file=sys.stderr)
-        return inspect_path(path, max_file_size=max_size)
+        return inspect_path(path, max_file_size=max_file_size, max_video_size=max_video_size)
 
     if workers == 1 or len(paths) == 1:
         return [_one(path) for path in paths]
@@ -587,10 +605,12 @@ def _colour(args: argparse.Namespace, settings: Settings) -> bool:
     return sys.stdout.isatty()
 
 
-def _max_size(args: argparse.Namespace, settings: Settings) -> int:
+def size_limits(args: argparse.Namespace, settings: Settings) -> tuple[int, int]:
+    """Return the photograph ceiling and the video ceiling."""
     if args.max_size:
-        return int(args.max_size)
-    return settings.max_file_size
+        chosen = int(args.max_size)
+        return chosen, chosen
+    return settings.max_file_size, settings.max_video_size
 
 
 def _output_is_directory(output: Path | None, count: int) -> bool:

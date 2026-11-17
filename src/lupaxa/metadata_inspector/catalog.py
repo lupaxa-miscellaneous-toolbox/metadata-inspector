@@ -12,6 +12,7 @@ _NO_TZ = (
     "This is the metadata timestamp, not the file's filesystem timestamp."
 )
 _SAFE = " Removing the field does not change the visible pixels."
+_MEDIA = " Removing the field does not change picture or sound."
 _NOT_PROOF = " This is not proof of a privacy breach."
 
 
@@ -39,6 +40,25 @@ def _rule(
     structural: bool = False,
 ) -> Rule:
     return Rule(id_, name, classification, explanation, action, attribution, structural)
+
+
+def _media_rule(
+    id_: str,
+    name: str,
+    classification: str,
+    detail: str,
+    action: str,
+    *,
+    attribution: bool = False,
+) -> Rule:
+    return _rule(
+        id_,
+        name,
+        classification,
+        detail + _MEDIA + _NOT_PROOF,
+        action,
+        attribution=attribution,
+    )
 
 
 RULES: dict[tuple[str, str], Rule] = {
@@ -254,6 +274,13 @@ RULES: dict[tuple[str, str], Rule] = {
         "A destination location stored in GPS metadata." + _SAFE + _NOT_PROOF,
         "Remove before sharing.",
     ),
+    ("GPS", "Route"): _media_rule(
+        "container.gps.route",
+        "GPS route",
+        "high",
+        "A route stored with the movie records where the camera moved.",
+        "Remove before sharing.",
+    ),
     ("IPTC", "By-line"): _rule(
         "iptc.byline",
         "Author",
@@ -446,6 +473,129 @@ RULES: dict[tuple[str, str], Rule] = {
         "The public profile keeps copyright.",
         attribution=True,
     ),
+    ("CONTAINER", "SerialNumber"): _media_rule(
+        "container.device.serial",
+        "Serial number",
+        "high",
+        "A serial number stored in the movie can link recordings that otherwise look unrelated.",
+        "Remove before sharing.",
+    ),
+    ("CONTAINER", "CreationTime"): _media_rule(
+        "container.datetime.creation",
+        "Creation time",
+        "medium",
+        "The creation time stored in the movie header or user data.",
+        "Remove if the time should not be shared.",
+    ),
+    ("CONTAINER", "ModificationTime"): _media_rule(
+        "container.datetime.modification",
+        "Modification time",
+        "medium",
+        "The modification time stored in the movie header.",
+        "Remove if the time should not be shared.",
+    ),
+    ("CONTAINER", "Artist"): _media_rule(
+        "container.artist",
+        "Artist",
+        "medium",
+        "An artist or author name stored in the movie. This is attribution, "
+        "which is separate from a device identifier.",
+        "The public profile keeps attribution. Anonymous and minimal profiles remove it.",
+        attribution=True,
+    ),
+    ("CONTAINER", "Copyright"): _media_rule(
+        "container.copyright",
+        "Copyright notice",
+        "informational",
+        "Copyright text is rights metadata, not by itself a device identifier.",
+        "The public profile keeps copyright. Removing it discards attribution.",
+        attribution=True,
+    ),
+    ("CONTAINER", "Make"): _media_rule(
+        "container.device.make",
+        "Device make",
+        "low",
+        "The device manufacturer stored in the movie.",
+        "Usually safe to remove. The public profile keeps it.",
+    ),
+    ("CONTAINER", "Model"): _media_rule(
+        "container.device.model",
+        "Device model",
+        "low",
+        "The device model stored in the movie. It is not a unique device identifier.",
+        "Usually safe to remove. The public profile keeps it.",
+    ),
+    ("CONTAINER", "Software"): _media_rule(
+        "container.software",
+        "Software",
+        "low",
+        "The name of software that wrote the movie. This is ordinary software metadata, "
+        "not a unique identifier.",
+        "Usually safe to remove.",
+    ),
+    ("CONTAINER", "Title"): _media_rule(
+        "container.title",
+        "Title",
+        "low",
+        "A title stored in the movie. The text itself may identify a person or place.",
+        "Review the text before sharing.",
+    ),
+    ("CONTAINER", "Description"): _media_rule(
+        "container.description",
+        "Description",
+        "low",
+        "A description stored in the movie. The text itself may identify a person or place.",
+        "Review the text before sharing.",
+    ),
+    ("CONTAINER", "Comment"): _media_rule(
+        "container.comment",
+        "Comment",
+        "low",
+        "A comment stored in the movie. The text itself may identify a person or place.",
+        "Review the text before sharing.",
+    ),
+    ("CONTAINER", "Text"): _media_rule(
+        "container.text",
+        "Text",
+        "low",
+        "Text stored in the movie. The text itself may identify a person or place.",
+        "Review the text before sharing.",
+    ),
+    ("CONTAINER", "BinaryItem"): _media_rule(
+        "container.binary",
+        "Binary item",
+        "medium",
+        "A binary metadata item stored in the movie.",
+        "Remove if the value should not be shared.",
+    ),
+    ("CONTAINER", "Timecode"): _media_rule(
+        "container.timecode",
+        "Timecode",
+        "informational",
+        "A timecode stored in the movie.",
+        "The public profile keeps this field.",
+    ),
+    ("CONTAINER", "TimedText"): _media_rule(
+        "container.timed_text",
+        "Timed text",
+        "medium",
+        "Timed text stored in the movie. The text may identify a person or place.",
+        "Review the text before sharing.",
+    ),
+    ("CONTAINER", "TimedMetadata"): _media_rule(
+        "container.timed_metadata",
+        "Timed metadata",
+        "medium",
+        "Timed metadata stored in the movie.",
+        "Remove if the value should not be shared.",
+    ),
+    ("CONTAINER", "UnparsedPoster"): _media_rule(
+        "container.poster.unparsed",
+        "Unparsed poster",
+        "medium",
+        "A poster image was present but not parsed.",
+        "Remove if the poster should not be shared.",
+    ),
 }
 
 TECHNICAL_EXIF = frozenset(
@@ -533,7 +683,11 @@ def finding_from_record(record: Record) -> Finding:
     """Classify one inventory record."""
     rule = rule_for(record.family, record.field)
     explanation = rule.explanation
-    if record.family in {"EXIF", "IPTC", "XMP", "GPS"} and _has_offset(record.interpreted):
+    if (
+        record.family in {"EXIF", "IPTC", "XMP", "GPS"}
+        and record.field != "Route"
+        and _has_offset(record.interpreted)
+    ):
         explanation += " A timezone offset is present in the stored value."
     return Finding(
         id=rule.id,

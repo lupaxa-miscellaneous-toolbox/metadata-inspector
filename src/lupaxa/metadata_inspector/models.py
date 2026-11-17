@@ -80,6 +80,9 @@ class ImageFacts:
     icc: bool = False
     icc_bytes: int = 0
     filesystem_mtime: str | None = None
+    duration_seconds: float | None = None
+    video_codec: str | None = None
+    audio_tracks: list[dict[str, object]] = field(default_factory=list)
 
 
 @dataclass
@@ -168,6 +171,7 @@ class Settings:
     report_format: str = "text"
     colour: bool = True
     max_file_size: int = 100 * 1024 * 1024
+    max_video_size: int = 8 * 1024 * 1024 * 1024
     max_depth: int = 32
     workers: int = 4
     follow_symlinks: bool = False

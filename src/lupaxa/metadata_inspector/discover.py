@@ -5,7 +5,20 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-KNOWN_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".heic", ".heif"}
+KNOWN_SUFFIXES = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp",
+    ".tif",
+    ".tiff",
+    ".heic",
+    ".heif",
+    ".mp4",
+    ".m4v",
+    ".mov",
+    ".3gp",
+}
 
 
 class PathSafetyError(ValueError):
